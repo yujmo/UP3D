@@ -1,5 +1,6 @@
 # UP3D: Utilizing Pseudo Points to Enhance 3D Object Detection
 # “The code still needs further cleanup and organization.”
+Due to some unforeseen circumstances, I haven’t had the chance to properly clean up and organize the code yet. There have simply been too many things to deal with lately.
 
 Official implementation of **UP3D**, a pseudo-point-enhanced 3D object detection framework.
 
