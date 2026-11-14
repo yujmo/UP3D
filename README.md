@@ -60,6 +60,7 @@ If you want to generate dense depth maps by yourself, it is recommended to use [
 
     ```
     cd up3d
+    export PYTHONPATH="/XXX/UP3D/pcdet/twise/Codes:$PYTHONPATH"
     python setup.py develop
     cd pcdet/ops/iou3d/cuda_op
     python setup.py develop
@@ -82,3 +83,7 @@ If you find this project useful, please consider citing our paper:
 2. [Openpcdet](https://github.com/open-mmlab/OpenPCDet])
 3. [CenterPoint](https://github.com/tianweiy/CenterPoint])
 4. [MVP](https://github.com/tianweiy/MVP])
+
+
+
+
