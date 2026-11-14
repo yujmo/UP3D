@@ -20,7 +20,8 @@ from pcdet.utils import transform_utils
 # warnings.filterwarnings("ignore", category=UserWarning)
 from pcdet.utils.depth_project import depth_projection
 from pcdet.utils.transforms import Compose, BottomCrop
-
+from pcdet.twise.Codes.model import MultiRes_network_avgpool_diffspatialsizes
+from pcdet.twise.Codes.utils import smooth2chandep
 
 class KittiDatasetSFD(DatasetTemplate):
     def __init__(self, dataset_cfg, class_names, training=True, root_path=None, logger=None):
@@ -101,7 +102,110 @@ class KittiDatasetSFD(DatasetTemplate):
                             self.local_coords1,
                             self.local_coords2,
                             self.local_coords3]
+        self.init_twise()
+        print('xiao ha ha ')
+        
 
+    def init_twise(self):
+
+        self.twise_device = torch.device('cuda:1')
+
+        self.twise_params = {
+            'depth_maxrange': 80.0,
+            'threshold': 100
+        }
+
+        checkpoint_path = (
+            'xxxxxx/UP3D/pcdet/twise/pretrained_models/TWISE_gamma2.5/model_best.pth.tar'
+        )
+
+        checkpoint = torch.load(
+            checkpoint_path,
+            map_location=self.twise_device
+        )
+
+        self.twise_model = MultiRes_network_avgpool_diffspatialsizes()
+
+        self.twise_model.load_state_dict(checkpoint['model'])
+
+        self.twise_model = self.twise_model.to(self.twise_device)
+        self.twise_model.eval()
+        print('TWISE model loaded successfully.')
+
+    def twise_inference(self, image, sparse_depth):
+        h, w = image.shape[:2]
+
+        th, tw = 256, 1216
+
+        i = h - th
+        j = int(round((w - tw) / 2.))
+
+        if i < 0 or j < 0:
+            raise ValueError(f'Invalid image size: {(h, w)}')
+
+      
+        image_crop = image[i:i + th, j:j + tw]
+        sparse_crop = sparse_depth[i:i + th, j:j + tw]
+
+        rgb_tensor = torch.from_numpy(
+            np.ascontiguousarray(image_crop)
+        ).float()
+
+        rgb_tensor = rgb_tensor.permute(2, 0, 1).unsqueeze(0)
+      
+        if rgb_tensor.max().item() > 1.0:
+            rgb_tensor = rgb_tensor / 255.0
+
+        depth_tensor = torch.from_numpy(
+            np.ascontiguousarray(sparse_crop)
+        ).float()
+
+        depth_tensor = depth_tensor.unsqueeze(0).unsqueeze(0)
+ 
+        depth_tensor = (
+                depth_tensor / self.twise_params['depth_maxrange']
+        )
+ 
+        rgb_tensor = rgb_tensor.to(self.twise_device)
+        depth_tensor = depth_tensor.to(self.twise_device)
+    
+        with torch.no_grad():
+
+            valpred_dc, _, _ = self.twise_model(
+                depth_tensor,
+                rgb_tensor
+            )
+
+            pred_datavalid = smooth2chandep(
+                valpred_dc,
+                params=self.twise_params,
+                device=self.twise_device
+            )
+
+        
+        pred_depth = (
+            pred_datavalid
+            .squeeze()
+            .detach()
+            .cpu()
+            .numpy()
+            .astype(np.float32)
+        )
+
+        if pred_depth.shape != (th, tw):
+            raise ValueError(
+                f'Unexpected TWISE output shape: {pred_depth.shape}'
+            )
+
+        dense_depth = np.zeros(
+            (h, w),
+            dtype=np.float32
+        )
+
+        dense_depth[i:i + th, j:j + tw] = pred_depth
+
+        print('tui li cheng gong')
+        return dense_depth
 
     def include_kitti_data(self, mode):
         if self.logger is not None:
@@ -529,6 +633,8 @@ class KittiDatasetSFD(DatasetTemplate):
         image = self.get_image(sample_idx)
         dense_depth = self.get_dense_depth(sample_idx)
         sparse_depth = self.get_sparse_depth(calib, image, points[:, :3])
+
+        # twise_depth = self.twise_inference(image, sparse_depth)
 
         img_shape = info['image']['image_shape']
 
